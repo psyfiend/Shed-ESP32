@@ -1,0 +1,11 @@
+{
+    "name": "XIAO C6 Shed Pins",
+    "version": "1.0.0",
+    "description": "Pin config for Shed ESP32 project using XIAO C6",
+    "authors": {
+        "name": "Eric",
+        "email": "eric@switz.org"
+    },
+    "frameworks": "arduino",
+    "platforms": "*"
+}
