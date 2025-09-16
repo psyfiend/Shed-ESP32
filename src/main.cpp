@@ -1,119 +1,165 @@
 #include <Arduino.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SH110X.h>
-#include <Wire.h>
+#include <PubSubClient.h>
+#include <ArduinoJson.h>
 
-// Include our configuration and utility files
-#include "pin_config.h"
+// Include our modularized files
+#include "config.h"
 #include "connections.h"
-#include "utilities.h"
+#include "encoder.h"
+#include "power_monitor.h"
+#include "display_manager.h" // Our new display manager
 
-// Initialize the display
-Adafruit_SH1107 display(OLED_I2C_ADDRESS, -1);
+// --- State Tracking Variables ---
+DisplayMode currentMode = POWER_MODE_ALL;
+LightsSubMode currentLightsSubMode = LIVE_STATUS;
+PowerSubMode currentPowerSubMode = LIVE_POWER;
 
-// Global state variables
+bool lightIsOn = false;
+unsigned long lastMotionTime = 0;
+unsigned long lightOnTime = 0;
+int lastEncoderValue = 0;
 int pirState = LOW;
 int lastPirState = LOW;
-unsigned long pirHighTime = 0;
-unsigned long lastChangeTime = 0;
 unsigned long previousStateDuration = 0;
 unsigned long totalTriggeredTime = 0;
 int triggerCount = 0;
 
-// Function to handle display updates
-void drawDisplay() {
-  display.clearDisplay();
-  display.setTextSize(2);
-  display.setTextColor(SH110X_WHITE);
-  display.setCursor(20, 0);
+// --- Non-Blocking Timers ---
+unsigned long lastDisplayUpdateTime = 0;
+const int DISPLAY_UPDATE_INTERVAL = 100;
+unsigned long lastMqttReconnectAttempt = 0;
+unsigned long lastUserActivityTime = 0;
+const unsigned long INACTIVITY_TIMEOUT = 30000;
 
-  // Main status: ON or OFF
-  if (digitalRead(RELAY_PIN) == HIGH) {
-    display.print("ON");
-  } else {
-    display.print("OFF");
-  }
-
-  // Draw the progress bar
-  int barLength = map(min(millis() - lastChangeTime, (unsigned long)PIR_DELAY_MS), 0, PIR_DELAY_MS, 0, 128);
-  display.drawRect(0, 15, barLength, 5, SH110X_WHITE);
-
-  // Display the timing information
-  display.setTextSize(1);
-  display.setCursor(0, 25);
-  display.print("Current:");
-  display.setCursor(50, 25);
-  display.print(formatDuration(millis() - lastChangeTime));
-
-  display.setCursor(0, 35);
-  display.print("Prev:");
-  display.setCursor(50, 35);
-  display.print(formatDuration(previousStateDuration));
-
-  display.setCursor(0, 45);
-  display.print("Triggers:");
-  display.setCursor(50, 45);
-  display.print(triggerCount);
-
-  display.setCursor(0, 55);
-  display.print("Total On:");
-  display.setCursor(50, 55);
-  display.print(formatDuration(totalTriggeredTime));
-  
-  display.display();
-}
+// --- Forward Declaration ---
+void handle_lights_mode();
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("Booting up...");
 
-  // Set pin modes
-  pinMode(PIR_PIN, INPUT_PULLUP);
+  setup_display(); // Initialize the display using our new manager
+
+  pinMode(PIR_PIN, INPUT);
+  pinMode(LED_PIN, OUTPUT);
   pinMode(RELAY_PIN, OUTPUT);
-  digitalWrite(RELAY_PIN, LOW); // Ensure relay is off on boot
-  pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, LOW);
+  digitalWrite(LED_PIN, LOW);
+  digitalWrite(RELAY_PIN, LOW);
 
-  // Initialize OLED display
-  Wire.begin(OLED_SDA_PIN, OLED_SCL_PIN);
-  display.begin(OLED_I2C_ADDRESS);
-  display.display();
-  delay(100);
-
-  // Setup Wi-Fi and MQTT
+  setup_encoder();
   setup_wifi();
+  setup_power_monitor();
   client.setServer(MQTT_SERVER, 1883);
-
-  Serial.println("Setup complete.");
+  lastUserActivityTime = millis();
+  lastEncoderValue = get_encoder_value();
 }
 
 void loop() {
-  // MQTT loop
   if (!client.connected()) {
-    reconnect();
+    long now = millis();
+    if (now - lastMqttReconnectAttempt > 5000) {
+      lastMqttReconnectAttempt = now;
+      reconnect();
+    }
+  } else {
+    client.loop();
   }
-  client.loop();
+  
+  loop_encoder();
 
-  // Read PIR sensor
+  if (millis() - lastUserActivityTime > INACTIVITY_TIMEOUT) {
+    currentMode = POWER_MODE_ALL;
+    currentLightsSubMode = LIVE_STATUS;
+    currentPowerSubMode = LIVE_POWER;
+  }
+
+  int currentEncoderValue = get_encoder_value();
+  if (currentEncoderValue != lastEncoderValue) {
+    lastUserActivityTime = millis();
+    if (currentLightsSubMode == LIVE_STATUS && currentPowerSubMode == LIVE_POWER) {
+       int modeIndex = (int)currentMode;
+       if (currentEncoderValue > lastEncoderValue) modeIndex++;
+       else modeIndex--;
+       if (modeIndex < 0) modeIndex = NUM_MODES - 1;
+       if (modeIndex >= NUM_MODES) modeIndex = 0;
+       currentMode = (DisplayMode)modeIndex;
+    }
+    lastEncoderValue = currentEncoderValue;
+  }
+  
+  if (button_was_clicked()) {
+    lastUserActivityTime = millis();
+    switch (currentMode) {
+      case LIGHTS_MODE:
+        currentLightsSubMode = (currentLightsSubMode == LIVE_STATUS) ? SUB_SCREEN : LIVE_STATUS;
+        break;
+      case POWER_MODE_ALL:
+        break;
+      case POWER_MODE_CH1:
+      case POWER_MODE_CH2:
+      case POWER_MODE_CH3:
+        currentPowerSubMode = (currentPowerSubMode == LIVE_POWER) ? POWER_SUBSCREEN : LIVE_POWER;
+        break;
+    }
+  }
+
+  handle_lights_mode();
+  loop_power_monitor();
+
+  if (millis() - lastDisplayUpdateTime > DISPLAY_UPDATE_INTERVAL) {
+    lastDisplayUpdateTime = millis();
+    switch (currentMode) {
+      case LIGHTS_MODE:
+        draw_lights_screen(currentLightsSubMode, lightIsOn, lastMotionTime, lightOnTime, RELAY_ON_DURATION);
+        break;
+      case POWER_MODE_ALL:
+        draw_power_all_screen();
+        break;
+      case POWER_MODE_CH1:
+        draw_power_ch_screen(1, currentPowerSubMode);
+        break;
+      case POWER_MODE_CH2:
+        draw_power_ch_screen(2, currentPowerSubMode);
+        break;
+      case POWER_MODE_CH3:
+        draw_power_ch_screen(3, currentPowerSubMode);
+        break;
+      default:
+        draw_power_all_screen();
+        break;
+    }
+  }
+}
+
+void handle_lights_mode() {
   pirState = digitalRead(PIR_PIN);
+  digitalWrite(LED_PIN, pirState);
 
-  // Check for state change
+  if (pirState == HIGH) {
+    lastMotionTime = millis();
+    lastUserActivityTime = millis();
+  }
+  
+  bool relayShouldBeOn = (millis() - lastMotionTime < RELAY_ON_DURATION);
+  
+  if (relayShouldBeOn && !lightIsOn) {
+    lightIsOn = true;
+    Serial.println("Motion detected! Turning relay ON.");
+    digitalWrite(RELAY_PIN, HIGH);
+    triggerCount++;
+    lightOnTime = millis();
+    client.publish(MQTT_TOPIC_STATE, "on");
+    client.publish(MQTT_TOPIC_TRIGGERS, String(triggerCount).c_str());
+  } else if (!relayShouldBeOn && lightIsOn) {
+    lightIsOn = false;
+    Serial.println("Timer expired. Turning relay OFF.");
+    digitalWrite(RELAY_PIN, LOW);
+    totalTriggeredTime += (millis() - lightOnTime);
+    previousStateDuration = millis() - lightOnTime;
+    client.publish(MQTT_TOPIC_STATE, "off");
+  }
+
   if (pirState != lastPirState) {
-    lastChangeTime = millis();
-    previousStateDuration = millis() - lastChangeTime; // This line is incorrect
     lastPirState = pirState;
   }
-  
-  // Timer and relay control logic
-  if (pirState == HIGH) {
-    digitalWrite(RELAY_PIN, HIGH);
-    digitalWrite(LED_BUILTIN, HIGH);
-  } else {
-    // This is where a software timer would go
-    digitalWrite(RELAY_PIN, LOW);
-    digitalWrite(LED_BUILTIN, LOW);
-  }
-  
-  // Update display
-  drawDisplay();
 }
+

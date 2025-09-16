@@ -1,29 +1,19 @@
+// This is the "menu" for our connections module.
+// Any file that includes this can use the functions declared below.
+
 #ifndef CONNECTIONS_H
 #define CONNECTIONS_H
 
 #include <PubSubClient.h>
 
-// --- Device Identifiers ---
-// These are used for MQTT Discovery and should be unique to your device
-extern const char* device_id;
-extern const char* device_name;
-
-// --- Wi-Fi Credentials ---
-extern const char* WIFI_SSID;
-extern const char* WIFI_PASSWORD;
-
-// --- MQTT Broker Settings ---
-extern const char* MQTT_SERVER;
-extern const char* MQTT_USER;
-extern const char* MQTT_PASSWORD;
-extern const char* MQTT_TOPIC_STATUS;
-extern const char* MQTT_TOPIC_TRIGGERS;
-extern const char* MQTT_TOPIC_DEVICE_DISCOVERY;
-
+// "extern" tells the compiler that this object exists, but is defined
+// in a different file (in our case, connections.cpp).
 extern PubSubClient client;
 
+// This is the public list of functions available from this module.
 void setup_wifi();
 void reconnect();
 void mqtt_discovery();
 
-#endif
+#endif // CONNECTIONS_H
+
