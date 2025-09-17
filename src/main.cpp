@@ -1,13 +1,17 @@
 #include <Arduino.h>
+#include <WiFi.h>
 #include <PubSubClient.h>
-#include <ArduinoJson.h>
 
 // Include our modularized files
 #include "config.h"
 #include "connections.h"
 #include "encoder.h"
 #include "power_monitor.h"
-#include "display_manager.h" // Our new display manager
+#include "display_manager.h"
+
+// --- Global Objects ---
+WiFiClient espClient;
+PubSubClient client(espClient);
 
 // --- State Tracking Variables ---
 DisplayMode currentMode = POWER_MODE_ALL;
@@ -22,23 +26,20 @@ int pirState = LOW;
 int lastPirState = LOW;
 unsigned long previousStateDuration = 0;
 unsigned long totalTriggeredTime = 0;
-int triggerCount = 0;
 
 // --- Non-Blocking Timers ---
 unsigned long lastDisplayUpdateTime = 0;
-const int DISPLAY_UPDATE_INTERVAL = 100;
 unsigned long lastMqttReconnectAttempt = 0;
 unsigned long lastUserActivityTime = 0;
-const unsigned long INACTIVITY_TIMEOUT = 30000;
 
-// --- Forward Declaration ---
+// --- Forward Declarations ---
 void handle_lights_mode();
+
 
 void setup() {
   Serial.begin(115200);
 
-  setup_display(); // Initialize the display using our new manager
-
+  setup_display();
   pinMode(PIR_PIN, INPUT);
   pinMode(LED_PIN, OUTPUT);
   pinMode(RELAY_PIN, OUTPUT);
@@ -107,32 +108,34 @@ void loop() {
 
   if (millis() - lastDisplayUpdateTime > DISPLAY_UPDATE_INTERVAL) {
     lastDisplayUpdateTime = millis();
-    switch (currentMode) {
-      case LIGHTS_MODE:
-        draw_lights_screen(currentLightsSubMode, lightIsOn, lastMotionTime, lightOnTime, RELAY_ON_DURATION);
-        break;
-      case POWER_MODE_ALL:
-        draw_power_all_screen();
-        break;
-      case POWER_MODE_CH1:
-        draw_power_ch_screen(1, currentPowerSubMode);
-        break;
-      case POWER_MODE_CH2:
-        draw_power_ch_screen(2, currentPowerSubMode);
-        break;
-      case POWER_MODE_CH3:
-        draw_power_ch_screen(3, currentPowerSubMode);
-        break;
-      default:
-        draw_power_all_screen();
-        break;
+    
+    DisplayData data;
+    data.lightIsOn = lightIsOn;
+    data.lightOnTime = lightOnTime;
+    data.lastMotionTime = lastMotionTime;
+    for(int i=0; i<3; i++) {
+      data.busVoltage[i] = get_bus_voltage(i+1);
+      data.current[i] = get_current(i+1);
+      data.power[i] = get_power(i+1);
     }
+    
+    update_display(currentMode, currentLightsSubMode, currentPowerSubMode, data);
   }
 }
 
 void handle_lights_mode() {
   pirState = digitalRead(PIR_PIN);
   digitalWrite(LED_PIN, pirState);
+
+  // Publish raw PIR state if it has changed (edge detection)
+  if (pirState != lastPirState) {
+    if (pirState == HIGH) {
+      client.publish(MQTT_TOPIC_MOTION_STATUS, "on");
+    } else {
+      client.publish(MQTT_TOPIC_MOTION_STATUS, "off");
+    }
+    lastPirState = pirState;
+  }
 
   if (pirState == HIGH) {
     lastMotionTime = millis();
@@ -141,25 +144,20 @@ void handle_lights_mode() {
   
   bool relayShouldBeOn = (millis() - lastMotionTime < RELAY_ON_DURATION);
   
+  // Publish occupancy state if it has changed (edge detection)
   if (relayShouldBeOn && !lightIsOn) {
     lightIsOn = true;
-    Serial.println("Motion detected! Turning relay ON.");
+    Serial.println("Occupancy detected! Turning relay ON.");
     digitalWrite(RELAY_PIN, HIGH);
-    triggerCount++;
     lightOnTime = millis();
-    client.publish(MQTT_TOPIC_STATE, "on");
-    client.publish(MQTT_TOPIC_TRIGGERS, String(triggerCount).c_str());
+    client.publish(MQTT_TOPIC_OCCUPANCY_STATUS, "on");
   } else if (!relayShouldBeOn && lightIsOn) {
     lightIsOn = false;
-    Serial.println("Timer expired. Turning relay OFF.");
+    Serial.println("Occupancy ended. Turning relay OFF.");
     digitalWrite(RELAY_PIN, LOW);
     totalTriggeredTime += (millis() - lightOnTime);
     previousStateDuration = millis() - lightOnTime;
-    client.publish(MQTT_TOPIC_STATE, "off");
-  }
-
-  if (pirState != lastPirState) {
-    lastPirState = pirState;
+    client.publish(MQTT_TOPIC_OCCUPANCY_STATUS, "off");
   }
 }
 

@@ -1,78 +1,63 @@
 #include <Arduino.h>
-#include <Adafruit_INA3221.h>
+#include <Wire.h> 
+#include <INA226.h>
 #include "power_monitor.h"
 #include "config.h"
 
-// Create an instance of the INA3221 sensor object using the Adafruit library
-Adafruit_INA3221 ina3221 = Adafruit_INA3221();
+// --- DECLARED AS POINTERS ---
+INA226 *ina_ch1;
+// INA226 *ina_ch2;
+// INA226 *ina_ch3;
 
-// Variables to hold the latest sensor readings
-float busVoltage[3];
-float shuntVoltage[3];
-float current[3];
-float power[3];
+// Variables to hold the latest sensor readings for all 3 channels
+float busVoltage[3] = {0.0, 0.0, 0.0};
+float current[3] = {0.0, 0.0, 0.0};
+float power[3] = {0.0, 0.0, 0.0};
 
 // Non-blocking timer for sensor reads
 unsigned long lastSensorReadTime = 0;
-const int SENSOR_READ_INTERVAL = 1000; // Read sensors once per second
+const int SENSOR_READ_INTERVAL = 500; // Read sensors every 500ms
 
 void setup_power_monitor() {
-  Serial.println("Initializing INA3221...");
-  if (!ina3221.begin(INA3221_I2C_ADDRESS, &Wire)) { // can use other I2C addresses or buses
-    Serial.println("Failed to find INA3221 chip");
-    while (1);
-  }
+  Serial.println("Initializing INA226 Sensor...");
 
-  // --- Set the correct shunt resistor values ---
-  // As you correctly identified, the channels are 0, 1, and 2.
-  for (uint8_t i = 0; i < 3; i++) {
-    ina3221.setShuntResistance(i, 0.10);
-  }
+  // --- Initialize the I2C bus FIRST ---
+  Wire.begin();
   
-  Serial.println("INA3221 Initialized and Configured.");
+  // --- INSTANTIATED IN SETUP using the default constructor ---
+  ina_ch1 = new INA226();
+
+  // Initialize and calibrate our first sensor
+  ina_ch1->begin(INA226_CH1_ADDRESS);
+  ina_ch1->configure(INA226_AVERAGES_16, INA226_BUS_CONV_TIME_1100US, INA226_SHUNT_CONV_TIME_1100US, INA226_MODE_SHUNT_BUS_CONT);
+  ina_ch1->calibrate(INA226_CH1_SHUNT, 10);
+
+  Serial.println("INA226 Channel 1 Initialized.");
 }
 
 void loop_power_monitor() {
-  // Read the sensor on a non-blocking timer
   if (millis() - lastSensorReadTime > SENSOR_READ_INTERVAL) {
     lastSensorReadTime = millis();
-    for (int i = 0; i < 3; i++) {
-      // Use the correct 0-indexed channel and function names
-      busVoltage[i] = ina3221.getBusVoltage(i);
-      shuntVoltage[i] = ina3221.getShuntVoltage(i); // This returns Volts
-      current[i] = ina3221.getCurrentAmps(i);
-      power[i] = busVoltage[i] * current[i];
-    }
+    
+    busVoltage[0] = ina_ch1->readBusVoltage();
+    current[0] = ina_ch1->readShuntCurrent();
+    power[0] = ina_ch1->readBusPower();
   }
 }
 
 // --- Data Getter Functions ---
-// These functions allow other parts of the code to safely get the latest data
 float get_bus_voltage(int channel) {
-  if (channel >= 1 && channel <= 3) {
-    return busVoltage[channel - 1];
-  }
-  return 0.0;
-}
-
-float get_shunt_voltage(int channel) {
-  if (channel >= 1 && channel <= 3) {
-    return shuntVoltage[channel - 1];
-  }
+  if (channel >= 1 && channel <= 3) return busVoltage[channel - 1];
   return 0.0;
 }
 
 float get_current(int channel) {
-  if (channel >= 1 && channel <= 3) {
-    return current[channel - 1];
-  }
+  if (channel >= 1 && channel <= 3) return current[channel - 1];
   return 0.0;
 }
 
 float get_power(int channel) {
-  if (channel >= 1 && channel <= 3) {
-    return power[channel - 1];
-  }
+  if (channel >= 1 && channel <= 3) return power[channel - 1];
   return 0.0;
 }
 
