@@ -8,6 +8,7 @@
 #include "encoder.h"
 #include "power_monitor.h"
 #include "display_manager.h"
+#include "utils.h" // <-- ADDED: Include our new utilities
 
 // --- Global Objects ---
 WiFiClient espClient;
@@ -19,6 +20,7 @@ LightsSubMode currentLightsSubMode = LIVE_STATUS;
 PowerSubMode currentPowerSubMode = LIVE_POWER;
 
 bool lightIsOn = false;
+bool lightManualOverride = false;
 unsigned long lastMotionTime = 0;
 unsigned long lightOnTime = 0;
 int lastEncoderValue = 0;
@@ -35,7 +37,6 @@ unsigned long lastUserActivityTime = 0;
 // --- Forward Declarations ---
 void handle_lights_mode();
 
-
 void setup() {
   Serial.begin(115200);
 
@@ -49,7 +50,12 @@ void setup() {
   setup_encoder();
   setup_wifi();
   setup_power_monitor();
+  
+  // Configure the MQTT client
   client.setServer(MQTT_SERVER, 1883);
+  client.setBufferSize(2048);
+  client.setCallback(mqtt_callback);
+
   lastUserActivityTime = millis();
   lastEncoderValue = get_encoder_value();
 }
@@ -111,6 +117,7 @@ void loop() {
     
     DisplayData data;
     data.lightIsOn = lightIsOn;
+    data.lightManualOverride = lightManualOverride;
     data.lightOnTime = lightOnTime;
     data.lastMotionTime = lastMotionTime;
     for(int i=0; i<3; i++) {
@@ -123,11 +130,48 @@ void loop() {
   }
 }
 
+void handle_lights_command(String message) {
+    if (message == "ON") {
+      lightManualOverride = true;
+      lastMotionTime = millis(); // Start the timer manually
+      Serial.println("Manual override ON");
+    } else if (message == "OFF") {
+      unsigned long currentTimerDuration = lightManualOverride ? MANUAL_TIMER_DURATION : MOTION_TIMER_DURATION;
+      lightManualOverride = false;
+      // Force the timer to expire by setting lastMotionTime to the past
+      lastMotionTime = millis() - currentTimerDuration - 1; 
+      Serial.println("Manual override OFF");
+    }
+}
+
+void handle_motion_timer_command(String message) {
+    unsigned long newDuration = message.toInt() * 1000; // Convert seconds to milliseconds
+    if (newDuration >= 10 * 1000 && newDuration <= 3600 * 1000) { // Valid range: 10s to 3600s
+        MOTION_TIMER_DURATION = newDuration;
+        Serial.print("Motion timer updated to ");
+        Serial.print(newDuration / 1000);
+        Serial.println(" seconds.");
+    } else {
+        Serial.println("Invalid motion timer value received.");
+    }
+}
+
+void handle_manual_timer_command(String message) {
+    unsigned long newDuration = message.toInt() * 1000; // Convert seconds to milliseconds
+    if (newDuration >= 10 * 1000 && newDuration <= 3600 * 1000) { // Valid range: 10s to 3600s
+        MANUAL_TIMER_DURATION = newDuration;
+        Serial.print("Manual timer updated to ");
+        Serial.print(newDuration / 1000);
+        Serial.println(" seconds.");
+    } else {
+        Serial.println("Invalid manual timer value received.");
+    }
+}
+
 void handle_lights_mode() {
   pirState = digitalRead(PIR_PIN);
   digitalWrite(LED_PIN, pirState);
 
-  // Publish raw PIR state if it has changed (edge detection)
   if (pirState != lastPirState) {
     if (pirState == HIGH) {
       client.publish(MQTT_TOPIC_MOTION_STATUS, "on");
@@ -137,27 +181,41 @@ void handle_lights_mode() {
     lastPirState = pirState;
   }
 
-  if (pirState == HIGH) {
-    lastMotionTime = millis();
-    lastUserActivityTime = millis();
+  if (!lightManualOverride) {
+    if (pirState == HIGH) {
+      lastMotionTime = millis();
+      lastUserActivityTime = millis();
+    }
   }
   
-  bool relayShouldBeOn = (millis() - lastMotionTime < RELAY_ON_DURATION);
+  // Use the new helper function to get the correct timer duration
+  unsigned long currentTimerDuration = get_current_timer_duration(lightManualOverride);
+  bool relayShouldBeOn = (millis() - lastMotionTime < currentTimerDuration);
   
-  // Publish occupancy state if it has changed (edge detection)
   if (relayShouldBeOn && !lightIsOn) {
     lightIsOn = true;
-    Serial.println("Occupancy detected! Turning relay ON.");
+    if (lightManualOverride) {
+        Serial.println("Manual ON: Turning relay ON.");
+    } else {
+        Serial.println("Occupancy detected! Turning relay ON.");
+    }
     digitalWrite(RELAY_PIN, HIGH);
     lightOnTime = millis();
     client.publish(MQTT_TOPIC_OCCUPANCY_STATUS, "on");
+    client.publish(MQTT_TOPIC_LIGHT_STATE, "ON"); // Publish light state
   } else if (!relayShouldBeOn && lightIsOn) {
     lightIsOn = false;
-    Serial.println("Occupancy ended. Turning relay OFF.");
+    Serial.println("Timer expired. Turning relay OFF.");
     digitalWrite(RELAY_PIN, LOW);
     totalTriggeredTime += (millis() - lightOnTime);
     previousStateDuration = millis() - lightOnTime;
     client.publish(MQTT_TOPIC_OCCUPANCY_STATUS, "off");
+    client.publish(MQTT_TOPIC_LIGHT_STATE, "OFF"); // Publish light state
+
+    if (lightManualOverride) {
+      lightManualOverride = false;
+      Serial.println("Manual override timer expired. Returning to auto mode.");
+    }
   }
 }
 

@@ -1,33 +1,14 @@
 #include "display_manager.h"
 #include "config.h"
+#include "utils.h" // <-- ADDED: Include our new utilities
 #include <Adafruit_GFX.h>
 #include <Adafruit_SH110X.h>
 
-// --- Private Objects and Helper Functions ---
-
-// The display object is now private to this module
+// --- Private Objects ---
 static Adafruit_SH1107 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-
-// This helper function is also private
-static String formatDuration(unsigned long milliseconds) {
-    unsigned long totalSeconds = milliseconds / 1000;
-    int seconds = totalSeconds % 60;
-    int minutes = (totalSeconds / 60) % 60;
-    int hours = (totalSeconds / 3600);
-    String formattedString = "";
-    if (hours < 10) formattedString += "0";
-    formattedString += String(hours) + ":";
-    if (minutes < 10) formattedString += "0";
-    formattedString += String(minutes) + ":";
-    if (seconds < 10) formattedString += "0";
-    formattedString += String(seconds);
-    return formattedString;
-}
 
 
 // --- Private Drawing Functions ---
-// These are now static, meaning they can only be called from within this file.
-// They now accept a 'data' struct to get the information they need to draw.
 
 static void draw_power_all_screen(const DisplayData& data) {
   display.clearDisplay();
@@ -55,8 +36,8 @@ static void draw_power_all_screen(const DisplayData& data) {
     display.print(data.busVoltage[i], 2);
     display.print("V");
     display.setCursor(70, yPos + 12);
-    display.print(data.current[i], 2);
-    display.print("A");
+    display.print(data.current[i], 0); // Display as a whole number
+    display.print("mA");
     if (i < 2) {
         display.drawLine(5, yPos + 25, SCREEN_WIDTH - 5, yPos + 25, SH110X_WHITE);
     }
@@ -91,8 +72,8 @@ static void draw_power_ch_live_screen(int channel, const DisplayData& data) {
     display.setCursor(10, 65);
     display.print("Current:");
     display.setCursor(70, 65);
-    display.print(data.current[channel-1], 2);
-    display.print(" A");
+    display.print(data.current[channel-1], 0); // Display as a whole number
+    display.print(" mA");
     
     display.setCursor(10, 85);
     display.print("Power:");
@@ -110,17 +91,22 @@ static void draw_lights_live_screen(const DisplayData& data) {
   
   display.setTextSize(3);
   String stateText = data.lightIsOn ? "ON" : "OFF";
+  if (data.lightManualOverride) {
+      stateText = "MANUAL";
+  }
   int16_t x1, y1;
   uint16_t w, h;
   display.getTextBounds(stateText, 0, 0, &x1, &y1, &w, &h);
   display.setCursor((SCREEN_WIDTH - w) / 2, 8);
   display.println(stateText);
   
+  unsigned long currentTimerDuration = data.lightManualOverride ? MANUAL_TIMER_DURATION : MOTION_TIMER_DURATION;
+
   int barWidth = 0;
   if(data.lightIsOn) {
       unsigned long timeSinceMotion = millis() - data.lastMotionTime;
-      if (timeSinceMotion < RELAY_ON_DURATION) {
-          barWidth = map(timeSinceMotion, 0, RELAY_ON_DURATION, 0, SCREEN_WIDTH - 20);
+      if (timeSinceMotion < currentTimerDuration) {
+          barWidth = map(timeSinceMotion, 0, currentTimerDuration, 0, SCREEN_WIDTH - 20);
       }
   } else {
     barWidth = 0;
@@ -148,8 +134,8 @@ static void draw_lights_live_screen(const DisplayData& data) {
   unsigned long timeRemaining = 0;
   if (data.lightIsOn) {
     unsigned long timeSinceMotion = millis() - data.lastMotionTime;
-    if (timeSinceMotion < RELAY_ON_DURATION) {
-      timeRemaining = RELAY_ON_DURATION - timeSinceMotion;
+    if (timeSinceMotion < currentTimerDuration) {
+      timeRemaining = currentTimerDuration - timeSinceMotion;
     }
   }
   display.setTextSize(2);
@@ -196,8 +182,6 @@ void setup_display() {
 }
 
 
-// --- THIS IS THE NEW DISPATCHER FUNCTION ---
-// Its job is to look at the current state and call the correct private drawing function.
 void update_display(DisplayMode mode, LightsSubMode lightsSub, PowerSubMode powerSub, const DisplayData& data) {
   switch (mode) {
     case LIGHTS_MODE:

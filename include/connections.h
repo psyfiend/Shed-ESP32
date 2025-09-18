@@ -14,6 +14,11 @@ extern PubSubClient client;
 void setup_wifi();
 void reconnect();
 void mqtt_discovery();
+void mqtt_callback(char* topic, byte* payload, unsigned int length);
+
+void handle_lights_command(String message);
+void handle_motion_timer_command(String message);
+void handle_manual_timer_command(String message);
 
 #endif // CONNECTIONS_H
 

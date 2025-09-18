@@ -32,6 +32,13 @@ extern const char* MQTT_BASE_TOPIC;
 extern const char* MQTT_TOPIC_AVAILABILITY;
 extern const char* MQTT_TOPIC_MOTION_STATUS;    // For the physical PIR sensor
 extern const char* MQTT_TOPIC_OCCUPANCY_STATUS; // For the software timer
+extern const char* MQTT_TOPIC_LIGHT_STATE;      // For the physical light state
+extern const char* MQTT_TOPIC_LIGHT_COMMAND;    // For commands to control the light
+
+extern const char* MQTT_TOPIC_LIGHT_MOTION_TIMER_STATE; // shed/monitor/light/motion_timer/state"
+extern const char* MQTT_TOPIC_LIGHT_MOTION_TIMER_SET;   // shed/monitor/light/motion_timer/set"
+extern const char* MQTT_TOPIC_LIGHT_MANUAL_TIMER_STATE; // shed/monitor/light/manual_timer/state"
+extern const char* MQTT_TOPIC_LIGHT_MANUAL_TIMER_SET;   // shed/monitor/light/manual_timer/set"
 
 // --- MQTT Payloads ---
 extern const char* MQTT_PAYLOAD_ONLINE;
@@ -46,7 +53,8 @@ extern const float INA226_CH2_SHUNT;
 extern const float INA226_CH3_SHUNT;
 
 // --- Application Logic Constants ---
-extern const unsigned long RELAY_ON_DURATION;
+extern unsigned long MOTION_TIMER_DURATION;     // <-- RENAMED & CHANGED
+extern unsigned long MANUAL_TIMER_DURATION;     // <-- ADDED
 extern const int NUM_MODES;
 extern const unsigned long INACTIVITY_TIMEOUT;
 extern const int DISPLAY_UPDATE_INTERVAL;

@@ -32,6 +32,13 @@ const char* MQTT_BASE_TOPIC = "shed/monitor";
 const char* MQTT_TOPIC_AVAILABILITY = "shed/monitor/availability";
 const char* MQTT_TOPIC_MOTION_STATUS = "shed/monitor/motion/state";
 const char* MQTT_TOPIC_OCCUPANCY_STATUS = "shed/monitor/occupancy/state";
+const char* MQTT_TOPIC_LIGHT_STATE = "shed/monitor/light/state";         // Physical light state
+const char* MQTT_TOPIC_LIGHT_COMMAND = "shed/monitor/light/switch";      // Command to control the light
+
+const char* MQTT_TOPIC_LIGHT_MOTION_TIMER_STATE = "shed/monitor/light/motion_timer/state";
+const char* MQTT_TOPIC_LIGHT_MOTION_TIMER_SET = "shed/monitor/light/motion_timer/set";
+const char* MQTT_TOPIC_LIGHT_MANUAL_TIMER_STATE = "shed/monitor/light/manual_timer/state";
+const char* MQTT_TOPIC_LIGHT_MANUAL_TIMER_SET = "shed/monitor/light/manual_timer/set";
 
 // --- MQTT Payloads ---
 const char* MQTT_PAYLOAD_ONLINE = "online";
@@ -46,7 +53,8 @@ const float INA226_CH2_SHUNT = 0.01;
 const float INA226_CH3_SHUNT = 0.01;
 
 // --- Application Logic Constants ---
-const unsigned long RELAY_ON_DURATION = 10000;
+unsigned long MOTION_TIMER_DURATION = 10000;      // 10 seconds
+unsigned long MANUAL_TIMER_DURATION = 300000;     // 5 minutes (300,000 ms)
 const int NUM_MODES = 5;
 const unsigned long INACTIVITY_TIMEOUT = 30000;
 const int DISPLAY_UPDATE_INTERVAL = 100;

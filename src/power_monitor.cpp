@@ -16,7 +16,7 @@ float power[3] = {0.0, 0.0, 0.0};
 
 // Non-blocking timer for sensor reads
 unsigned long lastSensorReadTime = 0;
-const int SENSOR_READ_INTERVAL = 500; // Read sensors every 500ms
+const int SENSOR_READ_INTERVAL = 250; // Read sensors every 250ms
 
 void setup_power_monitor() {
   Serial.println("Initializing INA226 Sensor...");
@@ -40,7 +40,7 @@ void loop_power_monitor() {
     lastSensorReadTime = millis();
     
     busVoltage[0] = ina_ch1->readBusVoltage();
-    current[0] = ina_ch1->readShuntCurrent();
+    current[0] = ina_ch1->readShuntCurrent() * 1000; // Convert Amps to Milliamps
     power[0] = ina_ch1->readBusPower();
   }
 }

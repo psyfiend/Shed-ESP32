@@ -21,6 +21,7 @@ enum PowerSubMode { LIVE_POWER, POWER_SUBSCREEN };
 // making it easy to pass from the main logic to the display manager.
 struct DisplayData {
   bool lightIsOn;
+  bool lightManualOverride;
   unsigned long lastMotionTime;
   unsigned long lightOnTime;
   float busVoltage[3];
