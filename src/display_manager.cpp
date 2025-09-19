@@ -1,11 +1,16 @@
 #include "display_manager.h"
 #include "config.h"
-#include "utils.h" // <-- ADDED: Include our new utilities
+#include "utils.h"
 #include <Adafruit_GFX.h>
 #include <Adafruit_SH110X.h>
 
 // --- Private Objects ---
 static Adafruit_SH1107 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+
+// --- Forward declarations for new private drawing functions ---
+static void draw_lights_menu_screen(const DisplayData& data);
+static void draw_edit_timer_screen(const DisplayData& data, bool isMotionTimer);
 
 
 // --- Private Drawing Functions ---
@@ -36,7 +41,7 @@ static void draw_power_all_screen(const DisplayData& data) {
     display.print(data.busVoltage[i], 2);
     display.print("V");
     display.setCursor(70, yPos + 12);
-    display.print(data.current[i], 0); // Display as a whole number
+    display.print(data.current[i], 0);
     display.print("mA");
     if (i < 2) {
         display.drawLine(5, yPos + 25, SCREEN_WIDTH - 5, yPos + 25, SH110X_WHITE);
@@ -72,7 +77,7 @@ static void draw_power_ch_live_screen(int channel, const DisplayData& data) {
     display.setCursor(10, 65);
     display.print("Current:");
     display.setCursor(70, 65);
-    display.print(data.current[channel-1], 0); // Display as a whole number
+    display.print(data.current[channel-1], 0);
     display.print(" mA");
     
     display.setCursor(10, 85);
@@ -100,7 +105,7 @@ static void draw_lights_live_screen(const DisplayData& data) {
   display.setCursor((SCREEN_WIDTH - w) / 2, 8);
   display.println(stateText);
   
-  unsigned long currentTimerDuration = data.lightManualOverride ? MANUAL_TIMER_DURATION : MOTION_TIMER_DURATION;
+  unsigned long currentTimerDuration = get_current_timer_duration(data.lightManualOverride);
 
   int barWidth = 0;
   if(data.lightIsOn) {
@@ -145,6 +150,75 @@ static void draw_lights_live_screen(const DisplayData& data) {
   display.display();
 }
 
+static void draw_lights_menu_screen(const DisplayData& data) {
+    display.clearDisplay();
+    display.setTextColor(SH110X_WHITE);
+    display.drawRoundRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 8, SH110X_WHITE);
+
+    display.setTextSize(2);
+    String title = "LIGHTS";
+    int16_t x1, y1;
+    uint16_t w, h;
+    display.getTextBounds(title, 0, 0, &x1, &y1, &w, &h);
+    display.setCursor((SCREEN_WIDTH - w) / 2, 8);
+    display.println(title);
+    display.drawLine(5, 28, SCREEN_WIDTH - 5, 28, SH110X_WHITE);
+
+    const char* menuItems[] = {"", "Motion", "Manual", "Back"};
+    // --- UPDATED: Dynamic text now reflects actual light state ---
+    menuItems[0] = (data.lightIsOn) ? "Turn Off" : "Turn On";
+
+    display.setTextSize(2);
+    for (int i = 0; i < 4; i++) {
+        int yPos = 40 + (i * 22);
+        if (i == data.lightsMenuSelection) {
+            display.fillRect(5, yPos - 2, SCREEN_WIDTH - 10, 20, SH110X_WHITE);
+            display.setTextColor(SH110X_BLACK);
+            display.setCursor(10, yPos);
+            display.println(menuItems[i]);
+            display.setTextColor(SH110X_WHITE);
+        } else {
+            display.setCursor(10, yPos);
+            display.println(menuItems[i]);
+        }
+    }
+    display.display();
+}
+
+// --- UPDATED: Cosmetic changes for the edit screen ---
+static void draw_edit_timer_screen(const DisplayData& data, bool isMotionTimer) {
+    display.clearDisplay();
+    display.setTextColor(SH110X_WHITE);
+    display.drawRoundRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 8, SH110X_WHITE);
+
+    display.setTextSize(2);
+    String title = isMotionTimer ? "MOTION" : "MANUAL"; // Shorter title
+    int16_t x1, y1;
+    uint16_t w, h;
+    display.getTextBounds(title, 0, 0, &x1, &y1, &w, &h);
+    display.setCursor((SCREEN_WIDTH - w) / 2, 8);
+    display.println(title);
+    display.drawLine(5, 28, SCREEN_WIDTH - 5, 28, SH110X_WHITE);
+    
+    // Display the timer value being edited with a smaller font
+    display.setTextSize(2); // Smaller font size
+    unsigned long durationToDisplay = isMotionTimer ? data.tempMotionTimerDuration : data.tempManualTimerDuration;
+    String timeText = formatDuration(durationToDisplay);
+    display.getTextBounds(timeText, 0, 0, &x1, &y1, &w, &h);
+    display.setCursor((SCREEN_WIDTH - w) / 2, 65); // Repositioned
+    display.println(timeText);
+
+    // Display instructional text
+    display.setTextSize(1);
+    String instruction = "Turn to adjust. Press to Save.";
+    display.getTextBounds(instruction, 0, 0, &x1, &y1, &w, &h);
+    display.setCursor((SCREEN_WIDTH - w) / 2, 110);
+    display.println(instruction);
+
+    display.display();
+}
+
+
 static void draw_lights_sub_screen() {
     display.clearDisplay();
     display.setTextColor(SH110X_WHITE);
@@ -185,10 +259,19 @@ void setup_display() {
 void update_display(DisplayMode mode, LightsSubMode lightsSub, PowerSubMode powerSub, const DisplayData& data) {
   switch (mode) {
     case LIGHTS_MODE:
-      if (lightsSub == LIVE_STATUS) {
-        draw_lights_live_screen(data);
-      } else {
-        draw_lights_sub_screen();
+      switch (lightsSub) {
+        case LIVE_STATUS:
+          draw_lights_live_screen(data);
+          break;
+        case LIGHTS_MENU:
+          draw_lights_menu_screen(data);
+          break;
+        case EDIT_MOTION_TIMER:
+          draw_edit_timer_screen(data, true);
+          break;
+        case EDIT_MANUAL_TIMER:
+          draw_edit_timer_screen(data, false);
+          break;
       }
       break;
     case POWER_MODE_ALL:

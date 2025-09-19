@@ -13,7 +13,12 @@ enum DisplayMode {
   LIGHTS_MODE
 };
 
-enum LightsSubMode { LIVE_STATUS, SUB_SCREEN };
+enum LightsSubMode { 
+  LIVE_STATUS, 
+  LIGHTS_MENU, 
+  EDIT_MOTION_TIMER, 
+  EDIT_MANUAL_TIMER 
+};
 enum PowerSubMode { LIVE_POWER, POWER_SUBSCREEN };
 
 // --- Display Data Structure ---
@@ -27,6 +32,9 @@ struct DisplayData {
   float busVoltage[3];
   float current[3];
   float power[3];
+  int lightsMenuSelection;
+  unsigned long tempMotionTimerDuration; // <-- ADDED
+  unsigned long tempManualTimerDuration; // <-- ADDED
 };
 
 

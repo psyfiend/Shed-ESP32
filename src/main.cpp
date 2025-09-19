@@ -8,7 +8,7 @@
 #include "encoder.h"
 #include "power_monitor.h"
 #include "display_manager.h"
-#include "utils.h" // <-- ADDED: Include our new utilities
+#include "utils.h"
 
 // --- Global Objects ---
 WiFiClient espClient;
@@ -18,6 +18,13 @@ PubSubClient client(espClient);
 DisplayMode currentMode = POWER_MODE_ALL;
 LightsSubMode currentLightsSubMode = LIVE_STATUS;
 PowerSubMode currentPowerSubMode = LIVE_POWER;
+
+int lightsMenuSelection = 0;
+const int LIGHTS_MENU_ITEM_COUNT = 4;
+
+// --- Temporary variables for editing timers ---
+unsigned long tempMotionTimerDuration;
+unsigned long tempManualTimerDuration;
 
 bool lightIsOn = false;
 bool lightManualOverride = false;
@@ -36,6 +43,10 @@ unsigned long lastUserActivityTime = 0;
 
 // --- Forward Declarations ---
 void handle_lights_mode();
+void handle_lights_command(String message);
+void handle_motion_timer_command(String message);
+void handle_manual_timer_command(String message);
+
 
 void setup() {
   Serial.begin(115200);
@@ -51,7 +62,6 @@ void setup() {
   setup_wifi();
   setup_power_monitor();
   
-  // Configure the MQTT client
   client.setServer(MQTT_SERVER, 1883);
   client.setBufferSize(2048);
   client.setCallback(mqtt_callback);
@@ -82,13 +92,47 @@ void loop() {
   int currentEncoderValue = get_encoder_value();
   if (currentEncoderValue != lastEncoderValue) {
     lastUserActivityTime = millis();
-    if (currentLightsSubMode == LIVE_STATUS && currentPowerSubMode == LIVE_POWER) {
-       int modeIndex = (int)currentMode;
-       if (currentEncoderValue > lastEncoderValue) modeIndex++;
-       else modeIndex--;
-       if (modeIndex < 0) modeIndex = NUM_MODES - 1;
-       if (modeIndex >= NUM_MODES) modeIndex = 0;
-       currentMode = (DisplayMode)modeIndex;
+    int encoderChange = currentEncoderValue - lastEncoderValue;
+
+    switch (currentLightsSubMode) {
+      case LIGHTS_MENU:
+        lightsMenuSelection += (encoderChange > 0) ? 1 : -1;
+        if (lightsMenuSelection < 0) lightsMenuSelection = LIGHTS_MENU_ITEM_COUNT - 1;
+        if (lightsMenuSelection >= LIGHTS_MENU_ITEM_COUNT) lightsMenuSelection = 0;
+        break;
+
+      case EDIT_MOTION_TIMER:
+        // --- UPDATED: Safe timer adjustment to prevent underflow ---
+        if (encoderChange < 0) { // Decrementing
+          if (tempMotionTimerDuration > 30000) tempMotionTimerDuration -= 30000;
+          else tempMotionTimerDuration = 10000;
+        } else { // Incrementing
+          if (tempMotionTimerDuration < 3600000) tempMotionTimerDuration += 30000;
+          else tempMotionTimerDuration = 3600000;
+        }
+        break;
+        
+      case EDIT_MANUAL_TIMER:
+        // --- UPDATED: Safe timer adjustment to prevent underflow ---
+        if (encoderChange < 0) { // Decrementing
+          if (tempManualTimerDuration > 30000) tempManualTimerDuration -= 30000;
+          else tempManualTimerDuration = 10000;
+        } else { // Incrementing
+          if (tempManualTimerDuration < 3600000) tempManualTimerDuration += 30000;
+          else tempManualTimerDuration = 3600000;
+        }
+        break;
+        
+      default: // Includes LIVE_STATUS
+        if (currentMode != LIGHTS_MODE) {
+          int modeIndex = (int)currentMode;
+          if (encoderChange > 0) modeIndex++;
+          else modeIndex--;
+          if (modeIndex < 0) modeIndex = NUM_MODES - 1;
+          if (modeIndex >= NUM_MODES) modeIndex = 0;
+          currentMode = (DisplayMode)modeIndex;
+        }
+        break;
     }
     lastEncoderValue = currentEncoderValue;
   }
@@ -97,7 +141,43 @@ void loop() {
     lastUserActivityTime = millis();
     switch (currentMode) {
       case LIGHTS_MODE:
-        currentLightsSubMode = (currentLightsSubMode == LIVE_STATUS) ? SUB_SCREEN : LIVE_STATUS;
+        switch (currentLightsSubMode) {
+          case LIVE_STATUS:
+            currentLightsSubMode = LIGHTS_MENU;
+            lightsMenuSelection = 0;
+            break;
+          case LIGHTS_MENU:
+            switch (lightsMenuSelection) {
+              case 0: // Turn light on/off
+                // --- UPDATED: Toggles based on actual light state ---
+                if (lightIsOn) {
+                  handle_lights_command("OFF");
+                } else {
+                  handle_lights_command("ON");
+                }
+                break;
+              case 1:
+                tempMotionTimerDuration = MOTION_TIMER_DURATION;
+                currentLightsSubMode = EDIT_MOTION_TIMER;
+                break;
+              case 2:
+                tempManualTimerDuration = MANUAL_TIMER_DURATION;
+                currentLightsSubMode = EDIT_MANUAL_TIMER;
+                break;
+              case 3:
+                currentLightsSubMode = LIVE_STATUS;
+                break;
+            }
+            break;
+          case EDIT_MOTION_TIMER:
+            handle_motion_timer_command(String(tempMotionTimerDuration / 1000));
+            currentLightsSubMode = LIGHTS_MENU;
+            break;
+          case EDIT_MANUAL_TIMER:
+            handle_manual_timer_command(String(tempManualTimerDuration / 1000));
+            currentLightsSubMode = LIGHTS_MENU;
+            break;
+        }
         break;
       case POWER_MODE_ALL:
         break;
@@ -120,6 +200,9 @@ void loop() {
     data.lightManualOverride = lightManualOverride;
     data.lightOnTime = lightOnTime;
     data.lastMotionTime = lastMotionTime;
+    data.lightsMenuSelection = lightsMenuSelection;
+    data.tempMotionTimerDuration = tempMotionTimerDuration;
+    data.tempManualTimerDuration = tempManualTimerDuration;
     for(int i=0; i<3; i++) {
       data.busVoltage[i] = get_bus_voltage(i+1);
       data.current[i] = get_current(i+1);
@@ -133,23 +216,22 @@ void loop() {
 void handle_lights_command(String message) {
     if (message == "ON") {
       lightManualOverride = true;
-      lastMotionTime = millis(); // Start the timer manually
+      lastMotionTime = millis();
       Serial.println("Manual override ON");
     } else if (message == "OFF") {
-      unsigned long currentTimerDuration = lightManualOverride ? MANUAL_TIMER_DURATION : MOTION_TIMER_DURATION;
       lightManualOverride = false;
-      // Force the timer to expire by setting lastMotionTime to the past
+      unsigned long currentTimerDuration = get_current_timer_duration(true);
       lastMotionTime = millis() - currentTimerDuration - 1; 
       Serial.println("Manual override OFF");
     }
 }
 
 void handle_motion_timer_command(String message) {
-    unsigned long newDuration = message.toInt() * 1000; // Convert seconds to milliseconds
-    if (newDuration >= 10 * 1000 && newDuration <= 3600 * 1000) { // Valid range: 10s to 3600s
-        MOTION_TIMER_DURATION = newDuration;
+    unsigned long newDurationSec = message.toInt();
+    if (newDurationSec >= 10 && newDurationSec <= 3600) {
+        MOTION_TIMER_DURATION = newDurationSec * 1000;
         Serial.print("Motion timer updated to ");
-        Serial.print(newDuration / 1000);
+        Serial.print(newDurationSec);
         Serial.println(" seconds.");
         client.publish(MQTT_TOPIC_LIGHT_MOTION_TIMER_STATE, message.c_str(), true);
     } else {
@@ -158,11 +240,11 @@ void handle_motion_timer_command(String message) {
 }
 
 void handle_manual_timer_command(String message) {
-    unsigned long newDuration = message.toInt() * 1000; // Convert seconds to milliseconds
-    if (newDuration >= 10 * 1000 && newDuration <= 3600 * 1000) { // Valid range: 10s to 3600s
-        MANUAL_TIMER_DURATION = newDuration;
+    unsigned long newDurationSec = message.toInt();
+    if (newDurationSec >= 10 && newDurationSec <= 3600) {
+        MANUAL_TIMER_DURATION = newDurationSec * 1000;
         Serial.print("Manual timer updated to ");
-        Serial.print(newDuration / 1000);
+        Serial.print(newDurationSec);
         Serial.println(" seconds.");
         client.publish(MQTT_TOPIC_LIGHT_MANUAL_TIMER_STATE, message.c_str(), true);
     } else {
@@ -190,7 +272,6 @@ void handle_lights_mode() {
     }
   }
   
-  // Use the new helper function to get the correct timer duration
   unsigned long currentTimerDuration = get_current_timer_duration(lightManualOverride);
   bool relayShouldBeOn = (millis() - lastMotionTime < currentTimerDuration);
   
@@ -204,7 +285,7 @@ void handle_lights_mode() {
     digitalWrite(RELAY_PIN, HIGH);
     lightOnTime = millis();
     client.publish(MQTT_TOPIC_OCCUPANCY_STATUS, "on");
-    client.publish(MQTT_TOPIC_LIGHT_STATE, "ON"); // Publish light state
+    client.publish(MQTT_TOPIC_LIGHT_STATE, "ON");
   } else if (!relayShouldBeOn && lightIsOn) {
     lightIsOn = false;
     Serial.println("Timer expired. Turning relay OFF.");
@@ -212,7 +293,7 @@ void handle_lights_mode() {
     totalTriggeredTime += (millis() - lightOnTime);
     previousStateDuration = millis() - lightOnTime;
     client.publish(MQTT_TOPIC_OCCUPANCY_STATUS, "off");
-    client.publish(MQTT_TOPIC_LIGHT_STATE, "OFF"); // Publish light state
+    client.publish(MQTT_TOPIC_LIGHT_STATE, "OFF");
 
     if (lightManualOverride) {
       lightManualOverride = false;
