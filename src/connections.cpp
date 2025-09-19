@@ -9,6 +9,8 @@ extern PubSubClient client;
 // These are defined in main.cpp, but our callback needs to control them.
 extern bool lightManualOverride;
 extern unsigned long lastMotionTime;
+extern unsigned long MOTION_TIMER_DURATION;
+extern unsigned long MANUAL_TIMER_DURATION;
 
 void setup_wifi() {
   delay(10);
@@ -29,7 +31,6 @@ void setup_wifi() {
   Serial.println(WiFi.localIP());
 }
 
-// --- UPDATED: The MQTT Callback Function now has logic ---
 void mqtt_callback(char* topic, byte* payload, unsigned int length) {
   // Convert the payload to a printable string
   payload[length] = '\0'; // Add a null terminator
@@ -42,12 +43,12 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
   Serial.println(message);
   Serial.println("-----------------------------");
 
-  // Only handle messages on the light command topic
-  if (String(topic) == MQTT_TOPIC_LIGHT_COMMAND) {
+  // ---- Route messages based on topic ----
+    if (String(topic) == MQTT_TOPIC_LIGHT_COMMAND) {
     handle_lights_command(message);
-  } else if (String(topic) == MQTT_TOPIC_LIGHT_MOTION_TIMER_SET) {
+    } else if (String(topic) == MQTT_TOPIC_LIGHT_MOTION_TIMER_SET) {
     handle_motion_timer_command(message);
-  } else if (String(topic) == MQTT_TOPIC_LIGHT_MANUAL_TIMER_SET) {
+    } else if (String(topic) == MQTT_TOPIC_LIGHT_MANUAL_TIMER_SET) {
     handle_manual_timer_command(message);
   }
 }
@@ -101,7 +102,6 @@ void mqtt_discovery() {
   JsonObject light_cmp = cmps_doc.createNestedObject("shed_monitor_light");
   light_cmp["name"] = "Shed Light";
   light_cmp["platform"] = "light";
-  // light_cmp["schema"] = "template";
   light_cmp["state_topic"] = MQTT_TOPIC_LIGHT_STATE;
   light_cmp["command_topic"] = MQTT_TOPIC_LIGHT_COMMAND;
   light_cmp["availability_topic"] = MQTT_TOPIC_AVAILABILITY;
@@ -122,6 +122,20 @@ void mqtt_discovery() {
   motion_timer_cmp["payload_not_available"] = MQTT_PAYLOAD_OFFLINE;
   motion_timer_cmp["unit_of_measurement"] = "s";  // seconds
   motion_timer_cmp["unique_id"] = "shed_esp32_light_motion_timer";
+
+  // Manual override Timer (for the light)
+  JsonObject manual_timer_cmp = cmps_doc.createNestedObject("shed_monitor_light_override_timer");
+  manual_timer_cmp["name"] = "Shed Light Override Timer";
+  manual_timer_cmp["platform"] = "number";
+  manual_timer_cmp["state_topic"] = MQTT_TOPIC_LIGHT_MANUAL_TIMER_STATE;
+  manual_timer_cmp["command_topic"] = MQTT_TOPIC_LIGHT_MANUAL_TIMER_SET;
+  manual_timer_cmp["min"] = 10;
+  manual_timer_cmp["max"] = 3600;
+  manual_timer_cmp["availability_topic"] = MQTT_TOPIC_AVAILABILITY;
+  manual_timer_cmp["payload_available"] = MQTT_PAYLOAD_ONLINE;
+  manual_timer_cmp["payload_not_available"] = MQTT_PAYLOAD_OFFLINE;
+  manual_timer_cmp["unit_of_measurement"] = "s";  // seconds
+  manual_timer_cmp["unique_id"] = "shed_esp32_light_override_timer";
  
 
   Serial.println("--- Single Discovery Payload ---");
@@ -142,20 +156,30 @@ void reconnect() {
 
   if (client.connect(clientId.c_str(), MQTT_USER, MQTT_PASSWORD, MQTT_TOPIC_AVAILABILITY, 1, true, MQTT_PAYLOAD_OFFLINE)) {
     Serial.println("connected");
+    
+    // Birth message and initial states
     client.publish(MQTT_TOPIC_AVAILABILITY, MQTT_PAYLOAD_ONLINE, true);
     
-    // Subscribe to the command topic
+    // Publish the default timers
+    String motion_payload = String(MOTION_TIMER_DURATION / 1000);
+    client.publish(MQTT_TOPIC_LIGHT_MOTION_TIMER_STATE, motion_payload.c_str(), true);
+    String manual_payload = String(MANUAL_TIMER_DURATION / 1000);
+    client.publish(MQTT_TOPIC_LIGHT_MANUAL_TIMER_STATE, manual_payload.c_str(), true);
+    Serial.println("Published initial timer states.");
+
+    // Subscribe to the command topics, apply retained values if broker is online
     client.subscribe(MQTT_TOPIC_LIGHT_COMMAND);
-    Serial.print("Subscribed to: ");
-    Serial.println(MQTT_TOPIC_LIGHT_COMMAND);
-
     client.subscribe(MQTT_TOPIC_LIGHT_MOTION_TIMER_SET);
-    Serial.println(MQTT_TOPIC_LIGHT_MOTION_TIMER_SET);
-
     client.subscribe(MQTT_TOPIC_LIGHT_MANUAL_TIMER_SET);
+    Serial.print("Subscribed to: ");
+    Serial.println();
+    Serial.println(MQTT_TOPIC_LIGHT_COMMAND);
+    Serial.println(MQTT_TOPIC_LIGHT_MOTION_TIMER_SET);
     Serial.println(MQTT_TOPIC_LIGHT_MANUAL_TIMER_SET);
 
+    // Publish the discovery message
     mqtt_discovery();
+
   } else {
     Serial.print("failed, rc=");
     Serial.print(client.state());
