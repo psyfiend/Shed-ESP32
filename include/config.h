@@ -30,11 +30,20 @@ extern const char* DEVICE_ID;
 // --- MQTT Topics ---
 extern const char* MQTT_BASE_TOPIC;
 extern const char* MQTT_TOPIC_AVAILABILITY;
-extern const char* MQTT_TOPIC_MOTION_STATUS;    // For the physical PIR sensor
-extern const char* MQTT_TOPIC_OCCUPANCY_STATUS; // For the software timer
+extern const char* MQTT_TOPIC_MOTION_STATE;    // For the physical PIR sensor
+extern const char* MQTT_TOPIC_OCCUPANCY_STATE; // For the software timer
 extern const char* MQTT_TOPIC_LIGHT_STATE;      // For the physical light state
 extern const char* MQTT_TOPIC_LIGHT_COMMAND;    // For commands to control the light
 
+// --- Base Topics for MQTT Discovery ---
+extern const char* MQTT_TOPIC_LIGHT_BASE;       // shed/monitor/light
+extern const char* MQTT_TOPIC_LIGHT_MOTION_TIMER_BASE;  // shed/monitor/light/motion_timer"
+extern const char* MQTT_TOPIC_LIGHT_MANUAL_TIMER_BASE;  // shed/monitor/light/manual_timer"
+extern const char* MQTT_TOPIC_POWER_CH1_STATE;     // shed/monitor/power/ch1
+extern const char* MQTT_TOPIC_POWER_CH2_STATE;     // shed/monitor/power/ch2
+extern const char* MQTT_TOPIC_POWER_CH3_STATE;     // shed/monitor/power/ch3
+
+// --- Topics for functions to address
 extern const char* MQTT_TOPIC_LIGHT_MOTION_TIMER_STATE; // shed/monitor/light/motion_timer/state"
 extern const char* MQTT_TOPIC_LIGHT_MOTION_TIMER_SET;   // shed/monitor/light/motion_timer/set"
 extern const char* MQTT_TOPIC_LIGHT_MANUAL_TIMER_STATE; // shed/monitor/light/manual_timer/state"

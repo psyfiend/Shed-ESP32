@@ -83,8 +83,8 @@ static void draw_power_ch_live_screen(int channel, const DisplayData& data) {
     display.setCursor(10, 85);
     display.print("Power:");
     display.setCursor(70, 85);
-    display.print(data.power[channel-1], 2);
-    display.print(" W");
+    display.print(data.power[channel-1], 0);
+    display.print(" mW");
     
     display.display();
 }

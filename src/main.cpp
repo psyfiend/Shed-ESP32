@@ -46,6 +46,9 @@ void handle_lights_mode();
 void handle_lights_command(String message);
 void handle_motion_timer_command(String message);
 void handle_manual_timer_command(String message);
+void handle_input();
+void handle_lights_input(int encoderChange, bool buttonPressed);
+void handle_power_input(int encoderChange, bool buttonPressed);
 
 
 void setup() {
@@ -63,7 +66,7 @@ void setup() {
   setup_power_monitor();
   
   client.setServer(MQTT_SERVER, 1883);
-  client.setBufferSize(2048);
+  client.setBufferSize(3072);
   client.setCallback(mqtt_callback);
 
   lastUserActivityTime = millis();
@@ -89,109 +92,14 @@ void loop() {
     currentPowerSubMode = LIVE_POWER;
   }
 
-  int currentEncoderValue = get_encoder_value();
-  if (currentEncoderValue != lastEncoderValue) {
-    lastUserActivityTime = millis();
-    int encoderChange = currentEncoderValue - lastEncoderValue;
+  // --- Central Input Handling ---
+  handle_input();
 
-    switch (currentLightsSubMode) {
-      case LIGHTS_MENU:
-        lightsMenuSelection += (encoderChange > 0) ? 1 : -1;
-        if (lightsMenuSelection < 0) lightsMenuSelection = LIGHTS_MENU_ITEM_COUNT - 1;
-        if (lightsMenuSelection >= LIGHTS_MENU_ITEM_COUNT) lightsMenuSelection = 0;
-        break;
-
-      case EDIT_MOTION_TIMER:
-        // --- UPDATED: Safe timer adjustment to prevent underflow ---
-        if (encoderChange < 0) { // Decrementing
-          if (tempMotionTimerDuration > 30000) tempMotionTimerDuration -= 30000;
-          else tempMotionTimerDuration = 10000;
-        } else { // Incrementing
-          if (tempMotionTimerDuration < 3600000) tempMotionTimerDuration += 30000;
-          else tempMotionTimerDuration = 3600000;
-        }
-        break;
-        
-      case EDIT_MANUAL_TIMER:
-        // --- UPDATED: Safe timer adjustment to prevent underflow ---
-        if (encoderChange < 0) { // Decrementing
-          if (tempManualTimerDuration > 30000) tempManualTimerDuration -= 30000;
-          else tempManualTimerDuration = 10000;
-        } else { // Incrementing
-          if (tempManualTimerDuration < 3600000) tempManualTimerDuration += 30000;
-          else tempManualTimerDuration = 3600000;
-        }
-        break;
-        
-      default: // Includes LIVE_STATUS
-        if (currentMode != LIGHTS_MODE) {
-          int modeIndex = (int)currentMode;
-          if (encoderChange > 0) modeIndex++;
-          else modeIndex--;
-          if (modeIndex < 0) modeIndex = NUM_MODES - 1;
-          if (modeIndex >= NUM_MODES) modeIndex = 0;
-          currentMode = (DisplayMode)modeIndex;
-        }
-        break;
-    }
-    lastEncoderValue = currentEncoderValue;
-  }
-  
-  if (button_was_clicked()) {
-    lastUserActivityTime = millis();
-    switch (currentMode) {
-      case LIGHTS_MODE:
-        switch (currentLightsSubMode) {
-          case LIVE_STATUS:
-            currentLightsSubMode = LIGHTS_MENU;
-            lightsMenuSelection = 0;
-            break;
-          case LIGHTS_MENU:
-            switch (lightsMenuSelection) {
-              case 0: // Turn light on/off
-                // --- UPDATED: Toggles based on actual light state ---
-                if (lightIsOn) {
-                  handle_lights_command("OFF");
-                } else {
-                  handle_lights_command("ON");
-                }
-                break;
-              case 1:
-                tempMotionTimerDuration = MOTION_TIMER_DURATION;
-                currentLightsSubMode = EDIT_MOTION_TIMER;
-                break;
-              case 2:
-                tempManualTimerDuration = MANUAL_TIMER_DURATION;
-                currentLightsSubMode = EDIT_MANUAL_TIMER;
-                break;
-              case 3:
-                currentLightsSubMode = LIVE_STATUS;
-                break;
-            }
-            break;
-          case EDIT_MOTION_TIMER:
-            handle_motion_timer_command(String(tempMotionTimerDuration / 1000));
-            currentLightsSubMode = LIGHTS_MENU;
-            break;
-          case EDIT_MANUAL_TIMER:
-            handle_manual_timer_command(String(tempManualTimerDuration / 1000));
-            currentLightsSubMode = LIGHTS_MENU;
-            break;
-        }
-        break;
-      case POWER_MODE_ALL:
-        break;
-      case POWER_MODE_CH1:
-      case POWER_MODE_CH2:
-      case POWER_MODE_CH3:
-        currentPowerSubMode = (currentPowerSubMode == LIVE_POWER) ? POWER_SUBSCREEN : LIVE_POWER;
-        break;
-    }
-  }
-
+  // --- Core Logic ---
   handle_lights_mode();
   loop_power_monitor();
 
+  // --- Display Updates ---
   if (millis() - lastDisplayUpdateTime > DISPLAY_UPDATE_INTERVAL) {
     lastDisplayUpdateTime = millis();
     
@@ -212,6 +120,147 @@ void loop() {
     update_display(currentMode, currentLightsSubMode, currentPowerSubMode, data);
   }
 }
+
+// --- NEW: Central Input Dispatcher ---
+void handle_input() {
+  int currentEncoderValue = get_encoder_value();
+  int encoderChange = 0;
+  if (currentEncoderValue != lastEncoderValue) {
+    encoderChange = currentEncoderValue - lastEncoderValue;
+    lastEncoderValue = currentEncoderValue;
+    lastUserActivityTime = millis();
+  }
+  
+  bool buttonPressed = button_was_clicked();
+  if (buttonPressed) {
+    lastUserActivityTime = millis();
+  }
+
+  // If there's no input, do nothing
+  if (encoderChange == 0 && !buttonPressed) {
+    return;
+  }
+
+  // Route the input to the correct specialized handler
+  switch (currentMode) {
+    case LIGHTS_MODE:
+      handle_lights_input(encoderChange, buttonPressed);
+      break;
+    case POWER_MODE_ALL:
+    case POWER_MODE_CH1:
+    case POWER_MODE_CH2:
+    case POWER_MODE_CH3:
+      handle_power_input(encoderChange, buttonPressed);
+      break;
+  }
+}
+
+
+// --- NEW: Specialized Input Handler for Lights Mode ---
+void handle_lights_input(int encoderChange, bool buttonPressed) {
+  // Handle knob turning
+  if (encoderChange != 0) {
+    switch (currentLightsSubMode) {
+      case LIGHTS_MENU:
+        lightsMenuSelection += (encoderChange > 0) ? 1 : -1;
+        if (lightsMenuSelection < 0) lightsMenuSelection = LIGHTS_MENU_ITEM_COUNT - 1;
+        if (lightsMenuSelection >= LIGHTS_MENU_ITEM_COUNT) lightsMenuSelection = 0;
+        break;
+      case EDIT_MOTION_TIMER:
+        if (encoderChange < 0) {
+          if (tempMotionTimerDuration > 30000) tempMotionTimerDuration -= 30000;
+          else tempMotionTimerDuration = 10000;
+        } else {
+          if (tempMotionTimerDuration < 3600000) tempMotionTimerDuration += 30000;
+          else tempMotionTimerDuration = 3600000;
+        }
+        break;
+      case EDIT_MANUAL_TIMER:
+        if (encoderChange < 0) {
+          if (tempManualTimerDuration > 30000) tempManualTimerDuration -= 30000;
+          else tempManualTimerDuration = 10000;
+        } else {
+          if (tempManualTimerDuration < 3600000) tempManualTimerDuration += 30000;
+          else tempManualTimerDuration = 3600000;
+        }
+        break;
+      case LIVE_STATUS:
+        {
+        // If we are on the live screen, knob turn changes main mode
+          int modeIndex = (int)currentMode;
+          if (encoderChange > 0) modeIndex++;
+          else modeIndex--;
+          if (modeIndex < 0) modeIndex = NUM_MODES - 1;
+          if (modeIndex >= NUM_MODES) modeIndex = 0;
+          currentMode = (DisplayMode)modeIndex;
+        }
+        break;
+    }
+  }
+
+  // Handle button presses
+  if (buttonPressed) {
+    switch (currentLightsSubMode) {
+      case LIVE_STATUS:
+        currentLightsSubMode = LIGHTS_MENU;
+        lightsMenuSelection = 0;
+        break;
+      case LIGHTS_MENU:
+        switch (lightsMenuSelection) {
+          case 0:
+            if (lightIsOn) handle_lights_command("OFF");
+            else handle_lights_command("ON");
+            break;
+          case 1:
+            tempMotionTimerDuration = MOTION_TIMER_DURATION;
+            currentLightsSubMode = EDIT_MOTION_TIMER;
+            break;
+          case 2:
+            tempManualTimerDuration = MANUAL_TIMER_DURATION;
+            currentLightsSubMode = EDIT_MANUAL_TIMER;
+            break;
+          case 3:
+            currentLightsSubMode = LIVE_STATUS;
+            break;
+        }
+        break;
+      case EDIT_MOTION_TIMER:
+        client.publish(MQTT_TOPIC_LIGHT_MOTION_TIMER_SET, String(tempMotionTimerDuration / 1000).c_str(), true);
+        currentLightsSubMode = LIGHTS_MENU;
+        break;
+      case EDIT_MANUAL_TIMER:
+        client.publish(MQTT_TOPIC_LIGHT_MANUAL_TIMER_SET, String(tempManualTimerDuration / 1000).c_str(), true);
+        currentLightsSubMode = LIGHTS_MENU;
+        break;
+    }
+  }
+}
+
+// --- NEW: Specialized Input Handler for all Power Modes ---
+void handle_power_input(int encoderChange, bool buttonPressed) {
+  // Handle knob turning
+  if (encoderChange != 0) {
+    // Only allow changing main mode from a top-level screen
+    if (currentPowerSubMode == LIVE_POWER) {
+      int modeIndex = (int)currentMode;
+      if (encoderChange > 0) modeIndex++;
+      else modeIndex--;
+      if (modeIndex < 0) modeIndex = NUM_MODES - 1;
+      if (modeIndex >= NUM_MODES) modeIndex = 0;
+      currentMode = (DisplayMode)modeIndex;
+    }
+    // If in a sub-screen, knob turns do nothing (as you requested)
+  }
+
+  // Handle button presses
+  if (buttonPressed) {
+    if (currentMode != POWER_MODE_ALL) {
+      // Toggle subscreen for channel-specific views
+      currentPowerSubMode = (currentPowerSubMode == LIVE_POWER) ? POWER_SUBSCREEN : LIVE_POWER;
+    }
+  }
+}
+
 
 void handle_lights_command(String message) {
     if (message == "ON") {
@@ -256,11 +305,12 @@ void handle_lights_mode() {
   pirState = digitalRead(PIR_PIN);
   digitalWrite(LED_PIN, pirState);
 
+  // --- UPDATED: Use _STATE topics ---
   if (pirState != lastPirState) {
     if (pirState == HIGH) {
-      client.publish(MQTT_TOPIC_MOTION_STATUS, "on");
+      client.publish(MQTT_TOPIC_MOTION_STATE, "on");
     } else {
-      client.publish(MQTT_TOPIC_MOTION_STATUS, "off");
+      client.publish(MQTT_TOPIC_MOTION_STATE, "off");
     }
     lastPirState = pirState;
   }
@@ -284,7 +334,7 @@ void handle_lights_mode() {
     }
     digitalWrite(RELAY_PIN, HIGH);
     lightOnTime = millis();
-    client.publish(MQTT_TOPIC_OCCUPANCY_STATUS, "on");
+    client.publish(MQTT_TOPIC_OCCUPANCY_STATE, "on");
     client.publish(MQTT_TOPIC_LIGHT_STATE, "ON");
   } else if (!relayShouldBeOn && lightIsOn) {
     lightIsOn = false;
@@ -292,7 +342,7 @@ void handle_lights_mode() {
     digitalWrite(RELAY_PIN, LOW);
     totalTriggeredTime += (millis() - lightOnTime);
     previousStateDuration = millis() - lightOnTime;
-    client.publish(MQTT_TOPIC_OCCUPANCY_STATUS, "off");
+    client.publish(MQTT_TOPIC_OCCUPANCY_STATE, "off");
     client.publish(MQTT_TOPIC_LIGHT_STATE, "OFF");
 
     if (lightManualOverride) {

@@ -1,6 +1,9 @@
 #include <Arduino.h>
 #include <Wire.h> 
 #include <INA226.h>
+#include <ArduinoJson.h>
+#include <PubSubClient.h>
+#include "connections.h"
 #include "power_monitor.h"
 #include "config.h"
 
@@ -41,7 +44,16 @@ void loop_power_monitor() {
     
     busVoltage[0] = ina_ch1->readBusVoltage();
     current[0] = ina_ch1->readShuntCurrent() * 1000; // Convert Amps to Milliamps
-    power[0] = ina_ch1->readBusPower();
+    power[0] = ina_ch1->readBusPower() * 1000;       // Convert Watts to Milliwatts ---
+
+    JsonDocument powerCh1Payload;
+    powerCh1Payload["bus_voltage"] = busVoltage[0];
+    powerCh1Payload["current"] = current[0];
+    powerCh1Payload["power"] = power[0];
+    
+    char buffer[128];
+    serializeJson(powerCh1Payload, buffer);
+    client.publish(MQTT_TOPIC_POWER_CH1_STATE, buffer, true);
   }
 }
 
