@@ -150,7 +150,7 @@ void mqtt_discovery() {
   power_ch1_v_cmp["stat_cla"] = "measurement";
   power_ch1_v_cmp["val_tpl"] = "{{ value_json.bus_voltage }}";
   power_ch1_v_cmp["uniq_id"] = "shed_esp32_power_ch1_voltage";
-  power_ch1_v_cmp["i"] = "mdi:sine-wave"; // icon
+  power_ch1_v_cmp["ic"] = "mdi:sine-wave"; // icon
   power_ch1_v_cmp["stat_t"] = MQTT_TOPIC_POWER_CH1_STATE;  // shed/monitor/power/ch1
   power_ch1_v_cmp["avty_t"] = MQTT_TOPIC_AVAILABILITY;
   power_ch1_v_cmp["pl_avail"] = MQTT_PAYLOAD_ONLINE;
@@ -165,7 +165,7 @@ void mqtt_discovery() {
   power_ch1_a_cmp["stat_cla"] = "measurement";
   power_ch1_a_cmp["val_tpl"] = "{{ value_json.current }}";
   power_ch1_a_cmp["uniq_id"] = "shed_esp32_power_ch1_current";
-  power_ch1_a_cmp["i"] = "mdi:current-dc"; // icon
+  power_ch1_a_cmp["ic"] = "mdi:current-dc"; // icon
   power_ch1_a_cmp["stat_t"] = MQTT_TOPIC_POWER_CH1_STATE;  // shed/monitor/power/ch1
   power_ch1_a_cmp["avty_t"] = MQTT_TOPIC_AVAILABILITY;
   power_ch1_a_cmp["pl_avail"] = MQTT_PAYLOAD_ONLINE;
@@ -180,7 +180,7 @@ void mqtt_discovery() {
   power_ch1_p_cmp["stat_cla"] = "measurement";
   power_ch1_p_cmp["val_tpl"] = "{{ value_json.power }}";
   power_ch1_p_cmp["uniq_id"] = "shed_esp32_power_ch1_power";
-  power_ch1_p_cmp["i"] = "mdi:solar-power-variant"; // icon
+  power_ch1_p_cmp["ic"] = "mdi:solar-power-variant"; // icon
   power_ch1_p_cmp["stat_t"] = MQTT_TOPIC_POWER_CH1_STATE;  // shed/monitor/power/ch1
   power_ch1_p_cmp["avty_t"] = MQTT_TOPIC_AVAILABILITY;
   power_ch1_p_cmp["pl_avail"] = MQTT_PAYLOAD_ONLINE;
