@@ -67,6 +67,7 @@ extern unsigned long MANUAL_TIMER_DURATION;     // <-- ADDED
 extern const int NUM_MODES;
 extern const unsigned long INACTIVITY_TIMEOUT;
 extern const int DISPLAY_UPDATE_INTERVAL;
+extern const bool PUBLISH_DISCOVERY;
 
 #endif // CONFIG_H
 

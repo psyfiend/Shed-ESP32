@@ -67,4 +67,5 @@ unsigned long MANUAL_TIMER_DURATION = 300000;     // 5 minutes (300,000 ms)
 const int NUM_MODES = 5;
 const unsigned long INACTIVITY_TIMEOUT = 30000;
 const int DISPLAY_UPDATE_INTERVAL = 100;
+const bool PUBLISH_DISCOVERY = true; // Set to 'false' to prevent publishing
 

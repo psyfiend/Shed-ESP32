@@ -66,7 +66,7 @@ void setup() {
   setup_power_monitor();
   
   client.setServer(MQTT_SERVER, 1883);
-  client.setBufferSize(3072);
+  client.setBufferSize(6288); // Increase buffer size for larger discovery payload
   client.setCallback(mqtt_callback);
 
   lastUserActivityTime = millis();

@@ -30,7 +30,7 @@ static void draw_power_all_screen(const DisplayData& data) {
   
   display.drawLine(5, 28, SCREEN_WIDTH - 5, 28, SH110X_WHITE);
   
-  const char* labels[] = {"Solar Panel", "Battery", "Output"};
+  const char* labels[] = {"Solar Panel", "Battery", "Load"};
   
   display.setTextSize(1);
   for (int i = 0; i < 3; i++) {
@@ -52,7 +52,7 @@ static void draw_power_all_screen(const DisplayData& data) {
 }
 
 static void draw_power_ch_live_screen(int channel, const DisplayData& data) {
-    const char* titles[] = {"", "PANEL", "BATTERY", "OUTPUT"};
+    const char* titles[] = {"", "PANEL", "BATTERY", "LOAD"};
     display.clearDisplay();
     display.setTextColor(SH110X_WHITE);
     display.drawRoundRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 8, SH110X_WHITE);

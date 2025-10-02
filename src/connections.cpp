@@ -75,10 +75,11 @@ void mqtt_discovery() {
 
   // Software-based Occupancy Sensor (timer-based)
   JsonObject occupancy_cmp = cmps_doc["shed_monitor_occupancy"].to<JsonObject>();
-  occupancy_cmp["name"] = "Occupancy Sensor";
+  occupancy_cmp["name"] = "Shed Occupancy";
   occupancy_cmp["p"] = "binary_sensor";
   occupancy_cmp["dev_cla"] = "occupancy";
   occupancy_cmp["uniq_id"] = "shed_esp32_pir_occupancy";
+  occupancy_cmp["object_id"] = "shed_occupancy"; // <-- ADDED
   occupancy_cmp["stat_t"] = MQTT_TOPIC_OCCUPANCY_STATE;  // shed/monitor/occupancy/state
   occupancy_cmp["avty_t"] = MQTT_TOPIC_AVAILABILITY;
   occupancy_cmp["pl_avail"] = MQTT_PAYLOAD_ONLINE;
@@ -88,10 +89,11 @@ void mqtt_discovery() {
 
   // Physical PIR Motion Sensor
   JsonObject motion_cmp = cmps_doc["shed_monitor_motion"].to<JsonObject>();
-  motion_cmp["name"] = "Motion Sensor";
+  motion_cmp["name"] = "Shed Motion";
   motion_cmp["p"] = "binary_sensor";
   motion_cmp["dev_cla"] = "motion";
   motion_cmp["uniq_id"] = "shed_esp32_pir_motion";
+  motion_cmp["object_id"] = "shed_motion"; // <-- ADDED
   motion_cmp["stat_t"] = MQTT_TOPIC_MOTION_STATE;  // shed/monitor/motion/state
   motion_cmp["avty_t"] = MQTT_TOPIC_AVAILABILITY;
   motion_cmp["pl_avail"] = MQTT_PAYLOAD_ONLINE;
@@ -101,9 +103,10 @@ void mqtt_discovery() {
 
   // Light (relay) entity
   JsonObject light_cmp = cmps_doc["shed_monitor_light"].to<JsonObject>();
-  light_cmp["name"] = "Overhead Light";
+  light_cmp["name"] = "Shed Light";
   light_cmp["p"] = "light";
   light_cmp["uniq_id"] = "shed_esp32_light";
+  light_cmp["object_id"] = "shed_light"; // <-- ADDED
   light_cmp["~"] = MQTT_TOPIC_LIGHT_BASE; //shed/monitor/light
   light_cmp["stat_t"] = "~/state";        //shed/monitor/light/state
   light_cmp["cmd_t"] = "~/switch";        //shed/monitor/light/switch
@@ -113,12 +116,13 @@ void mqtt_discovery() {
 
   // Motion Timer (for the light)
   JsonObject motion_timer_cmp = cmps_doc["shed_monitor_light_motion_timer"].to<JsonObject>();
-  motion_timer_cmp["name"] = "Motion Timer";
+  motion_timer_cmp["name"] = "Shed Motion Timer";
   motion_timer_cmp["p"] = "number";
   motion_timer_cmp["min"] = 10;
   motion_timer_cmp["max"] = 3600;
   motion_timer_cmp["unit_of_meas"] = "s";  // seconds
   motion_timer_cmp["uniq_id"] = "shed_esp32_light_motion_timer";
+  motion_timer_cmp["object_id"] = "shed_light_motion_timer"; // <-- ADDED
   motion_timer_cmp["~"] = MQTT_TOPIC_LIGHT_MOTION_TIMER_BASE; // shed/monitor/light/motion_timer
   motion_timer_cmp["stat_t"] = "~/state";                     // shed/monitor/light/motion_timer/state
   motion_timer_cmp["cmd_t"] = "~/set";                        // shed/monitor/light/motion_timer/set
@@ -128,29 +132,31 @@ void mqtt_discovery() {
 
   // Manual override Timer (for the light)
   JsonObject manual_timer_cmp = cmps_doc["shed_monitor_light_override_timer"].to<JsonObject>();
-  manual_timer_cmp["name"] = "Override Timer";
+  manual_timer_cmp["name"] = "Shed Override Timer";
   manual_timer_cmp["p"] = "number";
   manual_timer_cmp["min"] = 10;
   manual_timer_cmp["max"] = 3600;
   manual_timer_cmp["unit_of_meas"] = "s";  // seconds
   manual_timer_cmp["uniq_id"] = "shed_esp32_light_override_timer";
+  manual_timer_cmp["object_id"] = "shed_light_override_timer"; // <-- ADDED
   manual_timer_cmp["~"] = MQTT_TOPIC_LIGHT_MANUAL_TIMER_BASE; // shed/monitor/light/manual_timer
   manual_timer_cmp["stat_t"] = "~/state";                     // shed/monitor/light/manual_timer/state
   manual_timer_cmp["cmd_t"] = "~/set";                        // shed/monitor/light/manual_timer/set
-  manual_timer_cmp["avty_t"] = MQTT_TOPIC_AVAILABILITY;   // shed/monitor/availability
+  manual_timer_cmp["avty_t"] = MQTT_TOPIC_AVAILABILITY;       // shed/monitor/availability
   manual_timer_cmp["pl_avail"] = MQTT_PAYLOAD_ONLINE;
   manual_timer_cmp["pl_not_avail"] = MQTT_PAYLOAD_OFFLINE;
 
   // INA226 Channel 1 - Solar Panel Voltage
   JsonObject power_ch1_v_cmp = cmps_doc["shed_monitor_power_ch1_voltage"].to<JsonObject>();
-  power_ch1_v_cmp["name"] = "Channel 1 - Voltage";
+  power_ch1_v_cmp["name"] = "Solar Panel Voltage";
   power_ch1_v_cmp["p"] = "sensor";
   power_ch1_v_cmp["dev_cla"] = "voltage";
   power_ch1_v_cmp["unit_of_meas"] = "V";
   power_ch1_v_cmp["stat_cla"] = "measurement";
   power_ch1_v_cmp["val_tpl"] = "{{ value_json.bus_voltage }}";
   power_ch1_v_cmp["uniq_id"] = "shed_esp32_power_ch1_voltage";
-  power_ch1_v_cmp["ic"] = "mdi:sine-wave"; // icon
+  power_ch1_v_cmp["object_id"] = "shed_solar_panel_voltage"; // <-- ADDED
+  power_ch1_v_cmp["ic"] = "mdi:flash"; // icon
   power_ch1_v_cmp["stat_t"] = MQTT_TOPIC_POWER_CH1_STATE;  // shed/monitor/power/ch1
   power_ch1_v_cmp["avty_t"] = MQTT_TOPIC_AVAILABILITY;
   power_ch1_v_cmp["pl_avail"] = MQTT_PAYLOAD_ONLINE;
@@ -158,13 +164,14 @@ void mqtt_discovery() {
 
   // INA226 Channel 1 - Solar Panel Current
   JsonObject power_ch1_a_cmp = cmps_doc["shed_monitor_power_ch1_current"].to<JsonObject>();
-  power_ch1_a_cmp["name"] = "Channel 1 - Current";
+  power_ch1_a_cmp["name"] = "Solar Panel Current";
   power_ch1_a_cmp["p"] = "sensor";
   power_ch1_a_cmp["dev_cla"] = "current";
   power_ch1_a_cmp["unit_of_meas"] = "mA";
   power_ch1_a_cmp["stat_cla"] = "measurement";
   power_ch1_a_cmp["val_tpl"] = "{{ value_json.current }}";
   power_ch1_a_cmp["uniq_id"] = "shed_esp32_power_ch1_current";
+  power_ch1_a_cmp["object_id"] = "shed_solar_panel_current"; // <-- ADDED
   power_ch1_a_cmp["ic"] = "mdi:current-dc"; // icon
   power_ch1_a_cmp["stat_t"] = MQTT_TOPIC_POWER_CH1_STATE;  // shed/monitor/power/ch1
   power_ch1_a_cmp["avty_t"] = MQTT_TOPIC_AVAILABILITY;
@@ -173,19 +180,115 @@ void mqtt_discovery() {
 
   // INA226 Channel 1 - Solar Panel Power
   JsonObject power_ch1_p_cmp = cmps_doc["shed_monitor_power_ch1_power"].to<JsonObject>();
-  power_ch1_p_cmp["name"] = "Channel 1 - Power";
+  power_ch1_p_cmp["name"] = "Solar Panel Power";
   power_ch1_p_cmp["p"] = "sensor";
   power_ch1_p_cmp["dev_cla"] = "power";
   power_ch1_p_cmp["unit_of_meas"] = "mW";
   power_ch1_p_cmp["stat_cla"] = "measurement";
   power_ch1_p_cmp["val_tpl"] = "{{ value_json.power }}";
   power_ch1_p_cmp["uniq_id"] = "shed_esp32_power_ch1_power";
+  power_ch1_p_cmp["object_id"] = "shed_solar_panel_power"; // <-- ADDED
   power_ch1_p_cmp["ic"] = "mdi:solar-power-variant"; // icon
   power_ch1_p_cmp["stat_t"] = MQTT_TOPIC_POWER_CH1_STATE;  // shed/monitor/power/ch1
   power_ch1_p_cmp["avty_t"] = MQTT_TOPIC_AVAILABILITY;
   power_ch1_p_cmp["pl_avail"] = MQTT_PAYLOAD_ONLINE;
   power_ch1_p_cmp["pl_not_avail"] = MQTT_PAYLOAD_OFFLINE;
 
+    // INA226 Channel 2 - Battery Voltage
+  JsonObject power_ch2_v_cmp = cmps_doc["shed_monitor_power_ch2_voltage"].to<JsonObject>();
+  power_ch2_v_cmp["name"] = "Battery Voltage";
+  power_ch2_v_cmp["p"] = "sensor";
+  power_ch2_v_cmp["dev_cla"] = "voltage";
+  power_ch2_v_cmp["unit_of_meas"] = "V";
+  power_ch2_v_cmp["stat_cla"] = "measurement";
+  power_ch2_v_cmp["val_tpl"] = "{{ value_json.bus_voltage }}";
+  power_ch2_v_cmp["uniq_id"] = "shed_esp32_power_ch2_voltage";
+  power_ch2_v_cmp["object_id"] = "shed_battery_voltage"; // <-- ADDED
+  power_ch2_v_cmp["ic"] = "mdi:flash"; // icon
+  power_ch2_v_cmp["stat_t"] = MQTT_TOPIC_POWER_CH2_STATE;  // shed/monitor/power/ch2
+  power_ch2_v_cmp["avty_t"] = MQTT_TOPIC_AVAILABILITY;
+  power_ch2_v_cmp["pl_avail"] = MQTT_PAYLOAD_ONLINE;
+  power_ch2_v_cmp["pl_not_avail"] = MQTT_PAYLOAD_OFFLINE;
+
+  // INA226 Channel 2 - Battery Current
+  JsonObject power_ch2_a_cmp = cmps_doc["shed_monitor_power_ch2_current"].to<JsonObject>();
+  power_ch2_a_cmp["name"] = "Battery Current";
+  power_ch2_a_cmp["p"] = "sensor";
+  power_ch2_a_cmp["dev_cla"] = "current";
+  power_ch2_a_cmp["unit_of_meas"] = "mA";
+  power_ch2_a_cmp["stat_cla"] = "measurement";
+  power_ch2_a_cmp["val_tpl"] = "{{ value_json.current }}";
+  power_ch2_a_cmp["uniq_id"] = "shed_esp32_power_ch2_current";
+  power_ch2_a_cmp["object_id"] = "shed_battery_current"; // <-- ADDED
+  power_ch2_a_cmp["ic"] = "mdi:current-dc"; // icon
+  power_ch2_a_cmp["stat_t"] = MQTT_TOPIC_POWER_CH2_STATE;  // shed/monitor/power/ch2
+  power_ch2_a_cmp["avty_t"] = MQTT_TOPIC_AVAILABILITY;
+  power_ch2_a_cmp["pl_avail"] = MQTT_PAYLOAD_ONLINE;
+  power_ch2_a_cmp["pl_not_avail"] = MQTT_PAYLOAD_OFFLINE;
+
+  // INA226 Channel 2 - Battery Power
+  JsonObject power_ch2_p_cmp = cmps_doc["shed_monitor_power_ch2_power"].to<JsonObject>();
+  power_ch2_p_cmp["name"] = "Battery Power";
+  power_ch2_p_cmp["p"] = "sensor";
+  power_ch2_p_cmp["dev_cla"] = "power";
+  power_ch2_p_cmp["unit_of_meas"] = "mW";
+  power_ch2_p_cmp["stat_cla"] = "measurement";
+  power_ch2_p_cmp["val_tpl"] = "{{ value_json.power }}";
+  power_ch2_p_cmp["uniq_id"] = "shed_esp32_power_ch2_power";
+  power_ch2_p_cmp["object_id"] = "shed_battery_power"; // <-- ADDED
+  power_ch2_p_cmp["ic"] = "mdi:battery"; // icon
+  power_ch2_p_cmp["stat_t"] = MQTT_TOPIC_POWER_CH2_STATE;  // shed/monitor/power/ch2
+  power_ch2_p_cmp["avty_t"] = MQTT_TOPIC_AVAILABILITY;
+  power_ch2_p_cmp["pl_avail"] = MQTT_PAYLOAD_ONLINE;
+  power_ch2_p_cmp["pl_not_avail"] = MQTT_PAYLOAD_OFFLINE;
+
+  // INA226 Channel 3 - Load Voltage
+  JsonObject power_ch3_v_cmp = cmps_doc["shed_monitor_power_ch3_voltage"].to<JsonObject>();
+  power_ch3_v_cmp["name"] = "Load Voltage";
+  power_ch3_v_cmp["p"] = "sensor";
+  power_ch3_v_cmp["dev_cla"] = "voltage";
+  power_ch3_v_cmp["unit_of_meas"] = "V";
+  power_ch3_v_cmp["stat_cla"] = "measurement";
+  power_ch3_v_cmp["val_tpl"] = "{{ value_json.bus_voltage }}";
+  power_ch3_v_cmp["uniq_id"] = "shed_esp32_power_ch3_voltage";
+  power_ch3_v_cmp["object_id"] = "shed_load_voltage"; // <-- ADDED
+  power_ch3_v_cmp["ic"] = "mdi:flash"; // icon
+  power_ch3_v_cmp["stat_t"] = MQTT_TOPIC_POWER_CH3_STATE;  // shed/monitor/power/ch3
+  power_ch3_v_cmp["avty_t"] = MQTT_TOPIC_AVAILABILITY;
+  power_ch3_v_cmp["pl_avail"] = MQTT_PAYLOAD_ONLINE;
+  power_ch3_v_cmp["pl_not_avail"] = MQTT_PAYLOAD_OFFLINE;
+
+  // INA226 Channel 3 - Load Current
+  JsonObject power_ch3_a_cmp = cmps_doc["shed_monitor_power_ch3_current"].to<JsonObject>();
+  power_ch3_a_cmp["name"] = "Load Current";
+  power_ch3_a_cmp["p"] = "sensor";
+  power_ch3_a_cmp["dev_cla"] = "current";
+  power_ch3_a_cmp["unit_of_meas"] = "mA";
+  power_ch3_a_cmp["stat_cla"] = "measurement";
+  power_ch3_a_cmp["val_tpl"] = "{{ value_json.current }}";
+  power_ch3_a_cmp["uniq_id"] = "shed_esp32_power_ch3_current";
+  power_ch3_a_cmp["object_id"] = "shed_load_current"; // <-- ADDED
+  power_ch3_a_cmp["ic"] = "mdi:current-dc"; // icon
+  power_ch3_a_cmp["stat_t"] = MQTT_TOPIC_POWER_CH3_STATE;  // shed/monitor/power/ch3
+  power_ch3_a_cmp["avty_t"] = MQTT_TOPIC_AVAILABILITY;
+  power_ch3_a_cmp["pl_avail"] = MQTT_PAYLOAD_ONLINE;
+  power_ch3_a_cmp["pl_not_avail"] = MQTT_PAYLOAD_OFFLINE;
+
+  // INA226 Channel 3 - Load Power
+  JsonObject power_ch3_p_cmp = cmps_doc["shed_monitor_power_ch3_power"].to<JsonObject>();
+  power_ch3_p_cmp["name"] = "Load Power";
+  power_ch3_p_cmp["p"] = "sensor";
+  power_ch3_p_cmp["dev_cla"] = "power";
+  power_ch3_p_cmp["unit_of_meas"] = "mW";
+  power_ch3_p_cmp["stat_cla"] = "measurement";
+  power_ch3_p_cmp["val_tpl"] = "{{ value_json.power }}";
+  power_ch3_p_cmp["uniq_id"] = "shed_esp32_power_ch3_power";
+  power_ch3_p_cmp["object_id"] = "shed_load_power"; // <-- ADDED
+  power_ch3_p_cmp["ic"] = "mdi:power-plug"; // icon
+  power_ch3_p_cmp["stat_t"] = MQTT_TOPIC_POWER_CH3_STATE;  // shed/monitor/power/ch3
+  power_ch3_p_cmp["avty_t"] = MQTT_TOPIC_AVAILABILITY;
+  power_ch3_p_cmp["pl_avail"] = MQTT_PAYLOAD_ONLINE;
+  power_ch3_p_cmp["pl_not_avail"] = MQTT_PAYLOAD_OFFLINE;
 
   // Print the total size of the JSON payload
   size_t jsonSize = measureJson(discovery_doc);
@@ -194,17 +297,29 @@ void mqtt_discovery() {
   Serial.println(jsonSize);
   Serial.println("------------------------------");
 
+  if (PUBLISH_DISCOVERY) {  // True: publish the discovery payload
+    Serial.println("Publishing MQTT Discovery Payload...");
+    char buffer[6288];
+    serializeJson(discovery_doc, buffer);
+    client.publish(discovery_topic, buffer, true);
+  } else {  // False: skip publishing, just print to serial
+    Serial.println("------------------------------");
+    Serial.println("------------------------------");
+    Serial.println("------------------------------");
+    Serial.println("PUBLISH_DISCOVERY is set to false. Skipping MQTT Discovery publish.");
+    Serial.println("Note payload size and update main.cpp and connections.cpp accordingly.");
+    Serial.println("------------------------------");
+    Serial.println("------------------------------");
+    Serial.println("------------------------------");
+    return;
+  }
 
   Serial.println("--- Single Discovery Payload ---");
   serializeJsonPretty(discovery_doc, Serial);
   Serial.println();
   Serial.print("Publishing to topic: ");
   Serial.println(discovery_topic);
-  
-  char buffer[3072];
-  serializeJson(discovery_doc, buffer);
-  client.publish(discovery_topic, buffer, true);
-  Serial.println("------------------------------");
+
 }
 
 void reconnect() {
@@ -212,12 +327,14 @@ void reconnect() {
   String clientId = "ESP32-XIAOC6-ShedMonitor";
 
   if (client.connect(clientId.c_str(), MQTT_USER, MQTT_PASSWORD, MQTT_TOPIC_AVAILABILITY, 1, true, MQTT_PAYLOAD_OFFLINE)) {
-    Serial.println("connected");
+    Serial.println("connected!");
+    Serial.println("------------------------------");
     
     // Birth message and initial states
     client.publish(MQTT_TOPIC_AVAILABILITY, MQTT_PAYLOAD_ONLINE, true);
     
     // Publish the default timers
+    Serial.println("------------------------------");
     String motion_payload = String(MOTION_TIMER_DURATION / 1000);
     client.publish(MQTT_TOPIC_LIGHT_MOTION_TIMER_STATE, motion_payload.c_str(), true);
     String manual_payload = String(MANUAL_TIMER_DURATION / 1000);
@@ -225,14 +342,11 @@ void reconnect() {
     Serial.println("Published initial timer states.");
 
     // Subscribe to the command topics, apply retained values if broker is online
+    Serial.println("------------------------------");
     client.subscribe(MQTT_TOPIC_LIGHT_COMMAND);
     client.subscribe(MQTT_TOPIC_LIGHT_MOTION_TIMER_SET);
     client.subscribe(MQTT_TOPIC_LIGHT_MANUAL_TIMER_SET);
-    Serial.print("Subscribed to: ");
-    Serial.println();
-    Serial.println(MQTT_TOPIC_LIGHT_COMMAND);
-    Serial.println(MQTT_TOPIC_LIGHT_MOTION_TIMER_SET);
-    Serial.println(MQTT_TOPIC_LIGHT_MANUAL_TIMER_SET);
+    Serial.print("Subscribed to command topics.");
 
     // Publish the discovery message
     mqtt_discovery();
